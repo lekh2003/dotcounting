@@ -116,11 +116,32 @@ if (CONFIG.firebaseConfig) {
   const s2 = document.createElement('script');
   s2.src = "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js";
   document.head.appendChild(s2);
+
+  // Initialize AFTER all SDKs are loaded
   s2.onload = () => {
-    firebase.initializeApp(CONFIG.firebaseConfig);
-    firestore = firebase.firestore();
-    firebase.auth().signInAnonymously().catch(console.error);
-    fetchGlobalStats();
+    try {
+      firebase.initializeApp(CONFIG.firebaseConfig);
+      firestore = firebase.firestore();
+
+      // Wait for anonymous auth before reading stats
+      firebase.auth().onAuthStateChanged(async (user) => {
+        try {
+          if (!user) {
+            await firebase.auth().signInAnonymously();
+            return; // fetch will run when onAuthStateChanged fires again with a user
+          }
+          await fetchGlobalStats();
+        } catch (err) {
+          console.warn("Auth/Stats error:", err);
+          const el = document.getElementById('globalStatsArea');
+          if (el) el.textContent = "Error fetching stats.";
+        }
+      });
+    } catch (e) {
+      console.warn("Firebase init error:", e);
+      const el = document.getElementById('globalStatsArea');
+      if (el) el.textContent = "Error initializing Firebase.";
+    }
   };
 }
 
@@ -264,7 +285,7 @@ async function fetchGlobalStats(){
     const dotLines=Object.entries(perDot).map(([n,s])=>`${n} dots: ${Math.round(100*s.correct/s.total)}% (${s.total} trials)`).join("<br/>");
     globalStatsArea.innerHTML=`Public runs: ${totals.count} • Avg: ${avg}% • Best: ${totals.best}%<br/><br/>Accuracy by dot count:<br/>${dotLines}`;
     return docs;
-  }catch(e){console.warn(e); globalStatsArea.textContent="Error fetching stats."; return [];}
+  }catch(e){console.warn(e); const el=document.getElementById('globalStatsArea'); if(el) el.textContent="Error fetching stats."; return [];}
 }
 function renderGlobalStatsInCard(docs){
   const el=document.getElementById('afterGlobal'); if(!el)return;
@@ -280,8 +301,15 @@ function renderGlobalStatsInCard(docs){
   el.innerHTML=`Global stats (recent ${docs.length} runs):<br/>Avg accuracy: <strong>${avg}%</strong> • Best: <strong>${totals.best}%</strong><br/><br/>Accuracy by dot count:<br/>${dotLines}`;
 }
 
-/* Init */
-(async function init(){roundsInput.value=CONFIG.defaultRounds;minDotsInput.value=CONFIG.minDots;maxDotsInput.value=CONFIG.maxDots;})();
+/* Init (inputs only; Firebase init handles stats) */
+(function initInputs(){
+  const r=document.getElementById('roundsInput');
+  const mi=document.getElementById('minDots');
+  const ma=document.getElementById('maxDots');
+  if(r) r.value=CONFIG.defaultRounds;
+  if(mi) mi.value=CONFIG.minDots;
+  if(ma) ma.value=CONFIG.maxDots;
+})();
 </script>
 </body>
-</html
+</html>
