@@ -45,7 +45,7 @@
           The dots then disappear — press the number on your keyboard (1–10) for how many you saw.
         </p>
         <p class="muted">
-          Each round: <strong>0.3s</strong> dots → 2s to answer → 1s feedback. Default game has 60 rounds (≈3 minutes).
+          Each round: <strong>0.2s</strong> dots → 1.75s to answer → 1s feedback. Default game has 60 rounds (≈3 minutes).
         </p>
         <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
           <button id="startBtn">Start full game (60 rounds)</button>
@@ -65,8 +65,8 @@
 
 <script>
 const CONFIG = {
-  dotShowMs: 300,              // <— was 500ms, now 300ms
-  responseWindowMs: 2000,
+  dotShowMs: 200,             
+  responseWindowMs: 1750,
   feedbackMs: 1000,
   defaultRounds: 60,
   canvasPadding: 20,
