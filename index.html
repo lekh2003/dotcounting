@@ -160,7 +160,7 @@ function randnBoxMuller(){
   while(v===0) v=Math.random();
   return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
 }
-function sampleDotsLognormal(mu = 1.55, sigma = 0.5) {
+function sampleDotsLognormal(mu = 1.6, sigma = 0.45) {
   const z = randnBoxMuller();
   const x = Math.exp(mu + sigma * z);   // continuous lognormal
   let n = Math.max(1, Math.round(x));   // integerize, at least 1
