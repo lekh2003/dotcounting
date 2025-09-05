@@ -5,30 +5,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Dot Counting Game</title>
 <style>
-  /* Full blank screen except for dots and edge feedback */
-  html,body {
-    height:100%;
-    margin:0;
-    background: #ffffff;
-    font-family: Arial, Helvetica, sans-serif;
-    overflow:hidden;
-    color:#111;
-  }
-  .container { height:100%; display:flex; align-items:center; justify-content:center; position:relative; }
-  canvas#gameCanvas { background:transparent; display:block; }
-  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.95); z-index:50; text-align:center; padding:20px; }
-  .card { max-width:740px; width:100%; border-radius:12px; padding:24px; box-shadow:0 6px 20px rgba(0,0,0,0.12); background:linear-gradient(180deg,#fff,#f7f7f7); }
-  button { padding:10px 16px; font-size:16px; border-radius:8px; border:1px solid #ccc; cursor:pointer; background:white; }
-  .muted { color:#666; font-size:14px; }
-  .edge { position:fixed; z-index:40; pointer-events:none; transition:opacity 0.15s; opacity:0; }
-  .edge.left, .edge.right { top:0; bottom:0; width:6%; }
-  .edge.top, .edge.bottom { left:0; right:0; height:6%; }
-  .edge.left { left:0; } .edge.right { right:0; } .edge.top { top:0; } .edge.bottom { bottom:0; }
-  .edge.active { opacity:1; }
-  .edge.green{background:rgba(44,183,47,0.85);} .edge.red{background:rgba(231,76,60,0.85);}
-  .statbox { position:fixed; left:12px; top:12px; background:rgba(255,255,255,0.9); padding:8px 12px; border-radius:8px; box-shadow:0 4px 10px rgba(0,0,0,0.08); z-index:60; font-size:13px; }
-  .linkish { color: #1a73e8; text-decoration:underline; cursor:pointer; }
-  footer.note { position:fixed; right:12px; bottom:12px; font-size:12px; color:#666; }
+  html,body{height:100%;margin:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;overflow:hidden;color:#111}
+  .container{height:100%;display:flex;align-items:center;justify-content:center;position:relative}
+  canvas#gameCanvas{background:transparent;display:block}
+  .overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.95);z-index:50;text-align:center;padding:20px}
+  .card{max-width:740px;width:100%;border-radius:12px;padding:24px;box-shadow:0 6px 20px rgba(0,0,0,0.12);background:linear-gradient(180deg,#fff,#f7f7f7)}
+  button{padding:10px 16px;font-size:16px;border-radius:8px;border:1px solid #ccc;cursor:pointer;background:#fff}
+  .muted{color:#666;font-size:14px}
+  .edge{position:fixed;z-index:40;pointer-events:none;transition:opacity .15s;opacity:0}
+  .edge.left,.edge.right{top:0;bottom:0;width:6%}
+  .edge.top,.edge.bottom{left:0;right:0;height:6%}
+  .edge.left{left:0}.edge.right{right:0}.edge.top{top:0}.edge.bottom{bottom:0}
+  .edge.active{opacity:1}
+  .edge.green{background:rgba(44,183,47,0.85)}.edge.red{background:rgba(231,76,60,0.85)}
+  .statbox{position:fixed;left:12px;top:12px;background:rgba(255,255,255,0.9);padding:8px 12px;border-radius:8px;box-shadow:0 4px 10px rgba(0,0,0,0.08);z-index:60;font-size:13px}
+  .linkish{color:#1a73e8;text-decoration:underline;cursor:pointer}
+  footer.note{position:fixed;right:12px;bottom:12px;font-size:12px;color:#666}
 </style>
 </head>
 <body>
@@ -38,16 +30,18 @@
     <div id="edgeRight" class="edge right"></div>
     <div id="edgeTop" class="edge top"></div>
     <div id="edgeBottom" class="edge bottom"></div>
+
     <div id="statbox" class="statbox" style="display:none">
       <div>Round: <span id="statRound">0</span>/<span id="statRoundsTotal">0</span></div>
       <div>Correct: <span id="statCorrect">0</span></div>
       <div class="muted">Press keys 1–9 and 0 (for 10)</div>
     </div>
+
     <div id="overlay" class="overlay">
       <div class="card" id="card">
         <h1>Dot Counting Game</h1>
         <p class="muted">
-          You will see a set of dots (between 2 and 8) for half a second.<br/>
+          You will see a <strong>random number of dots</strong> for half a second (average ≈ 5.5).<br/>
           The dots then disappear — press the number on your keyboard (1–10) for how many you saw.
         </p>
         <p class="muted">
@@ -60,13 +54,12 @@
         <hr style="margin:16px 0;" />
         <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
           <div><label>Rounds: <input id="roundsInput" type="number" min="10" max="200" step="1" value="60" style="width:80px"/></label></div>
-          <div><label>Min dots: <input id="minDots" type="number" min="1" max="9" value="2" style="width:60px"/></label></div>
-          <div><label>Max dots: <input id="maxDots" type="number" min="2" max="20" value="8" style="width:60px"/></label></div>
         </div>
         <hr style="margin:16px 0;" />
         <div id="globalStatsArea" class="muted">Loading global stats...</div>
       </div>
     </div>
+
     <footer class="note">Made with AI</footer>
   </div>
 
@@ -76,9 +69,8 @@ const CONFIG = {
   responseWindowMs: 2000,
   feedbackMs: 1000,
   defaultRounds: 60,
-  practiceDurationSec: 60,
-  minDots: 2,
-  maxDots: 8,
+  canvasPadding: 20,
+  // (minDots/maxDots removed from gameplay; generation uses lognormal now)
   firebaseConfig: {
     apiKey: "AIzaSyBijKB23Azm4Gegzad7MhKboTMk9HBgtv0",
     authDomain: "dotcounting.firebaseapp.com",
@@ -117,19 +109,13 @@ if (CONFIG.firebaseConfig) {
   s2.src = "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js";
   document.head.appendChild(s2);
 
-  // Initialize AFTER all SDKs are loaded
   s2.onload = () => {
     try {
       firebase.initializeApp(CONFIG.firebaseConfig);
       firestore = firebase.firestore();
-
-      // Wait for anonymous auth before reading stats
       firebase.auth().onAuthStateChanged(async (user) => {
         try {
-          if (!user) {
-            await firebase.auth().signInAnonymously();
-            return; // fetch will run when onAuthStateChanged fires again with a user
-          }
+          if (!user) { await firebase.auth().signInAnonymously(); return; }
           await fetchGlobalStats();
         } catch (err) {
           console.warn("Auth/Stats error:", err);
@@ -152,8 +138,6 @@ const overlay = document.getElementById('overlay');
 const startBtn = document.getElementById('startBtn');
 const practiceBtn = document.getElementById('practiceBtn');
 const roundsInput = document.getElementById('roundsInput');
-const minDotsInput = document.getElementById('minDots');
-const maxDotsInput = document.getElementById('maxDots');
 const statbox = document.getElementById('statbox');
 const statRound = document.getElementById('statRound');
 const statRoundsTotal = document.getElementById('statRoundsTotal');
@@ -169,6 +153,21 @@ const globalStatsArea = document.getElementById('globalStatsArea');
 /* Canvas sizing */
 function resizeCanvas(){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
 window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+/* Random generators */
+function randnBoxMuller(){
+  let u=0, v=0;
+  while(u===0) u=Math.random();
+  while(v===0) v=Math.random();
+  return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
+}
+function sampleDotsLognormal(mu=1.55, sigma=0.5){
+  const z = randnBoxMuller();
+  const x = Math.exp(mu + sigma * z);      // continuous lognormal
+  let n = Math.max(1, Math.round(x));      // integerize, at least 1
+  if (n > 20) n = 20;                       // soft cap to keep visuals sane
+  return n;
+}
 
 /* Draw dots */
 function drawDots(n) {
@@ -193,8 +192,6 @@ function clearCanvas(){ ctx.clearRect(0,0,canvas.width,canvas.height); }
 
 /* Game flow */
 function startGame({rounds,practice=false}){
-  CONFIG.minDots=parseInt(minDotsInput.value)||2;
-  CONFIG.maxDots=parseInt(maxDotsInput.value)||8;
   state={...state, roundsTotal:rounds, roundIndex:0, currentDots:0, inRound:false,
     awaitingAnswer:false, correctCount:0, responseTimes:[], startTimeEpoch:Date.now(),
     practiceMode:practice, dotHistory:[]};
@@ -211,9 +208,7 @@ function endGame(){
   const accuracy=total?Math.round(1000*correct/total)/10:0;
   const medianRt=state.responseTimes.length?median(state.responseTimes):null;
 
-  if(!state.practiceMode && firestore &&
-     state.roundsTotal===CONFIG.defaultRounds &&
-     CONFIG.minDots===2 && CONFIG.maxDots===8){
+  if(!state.practiceMode && firestore && state.roundsTotal===CONFIG.defaultRounds){
     const dotStats={};
     state.dotHistory.forEach(e=>{
       if(!dotStats[e.n]) dotStats[e.n]={correct:0,total:0};
@@ -228,7 +223,7 @@ function median(arr){const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.leng
 function nextRound(){
   if(state.roundIndex>=state.roundsTotal){endGame();return;}
   state.inRound=true; state.awaitingAnswer=false; state.roundIndex++; updateStatBox();
-  const n=Math.floor(Math.random()*(CONFIG.maxDots-CONFIG.minDots+1))+CONFIG.minDots;
+  const n = sampleDotsLognormal(1.5, 0.5);
   state.currentDots=n; drawDots(n);
   setTimeout(()=>{ clearCanvas(); state.awaitingAnswer=true; state.roundTimer=Date.now();
     state.roundTimeoutHandle=setTimeout(()=>{ state.awaitingAnswer=false; giveFeedback(false,null);},CONFIG.responseWindowMs);
@@ -270,7 +265,7 @@ function showFinalOverlay({correct,total,accuracy,medianRt}){
 }
 
 /* Firestore */
-async function uploadRunResult(doc){if(!firestore)return; await firestore.collection('dot_game_runs').add(doc);}
+async function uploadRunResult(doc){if(!firestore)return; const uid=firebase.auth().currentUser?.uid||null; const ref=await firestore.collection('dot_game_runs').add({...doc,uid}); localStorage.setItem('lastRunDocId',ref.id);}
 async function fetchGlobalStats(){
   try{
     const snap=await firestore.collection('dot_game_runs').orderBy('createdAt','desc').limit(500).get();
@@ -301,14 +296,10 @@ function renderGlobalStatsInCard(docs){
   el.innerHTML=`Global stats (recent ${docs.length} runs):<br/>Avg accuracy: <strong>${avg}%</strong> • Best: <strong>${totals.best}%</strong><br/><br/>Accuracy by dot count:<br/>${dotLines}`;
 }
 
-/* Init (inputs only; Firebase init handles stats) */
+/* Init inputs (Firebase init handles stats) */
 (function initInputs(){
   const r=document.getElementById('roundsInput');
-  const mi=document.getElementById('minDots');
-  const ma=document.getElementById('maxDots');
   if(r) r.value=CONFIG.defaultRounds;
-  if(mi) mi.value=CONFIG.minDots;
-  if(ma) ma.value=CONFIG.maxDots;
 })();
 </script>
 </body>
