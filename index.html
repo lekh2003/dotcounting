@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Dot Counting Game</title>
+<style>
+  /* Full blank screen except for dots and edge feedback */
+  html,body {
+    height:100%;
+    margin:0;
+    background: #ffffff;
+    font-family: Arial, Helvetica, sans-serif;
+    overflow:hidden;
+    color:#111;
+  }
+
+  /* center container for messages and canvas */
+  .container {
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+  }
+
+  /* Canvas for drawing dots */
+  canvas#gameCanvas {
+    background:transparent;
+    display:block;
+  }
+
+  /* Intro / end screens overlay */
+  .overlay {
+    position:absolute;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(255,255,255,0.95);
+    z-index:50;
+    text-align:center;
+    padding:20px;
+  }
+
+  .card {
+    max-width:740px;
+    width:100%;
+    border-radius:12px;
+    padding:24px;
+    box-shadow:0 6px 20px rgba(0,0,0,0.12);
+    background:linear-gradient(180deg,#fff,#f7f7f7);
+  }
+
+  button {
+    padding:10px 16px;
+    font-size:16px;
+    border-radius:8px;
+    border:1px solid #ccc;
+    cursor:pointer;
+    background:white;
+  }
+
+  .muted { color:#666; font-size:14px; }
+
+  /* Edge flash bars for feedback (one each side) */
+  .edge {
+    position:fixed;
+    z-index:40;
+    pointer-events:none;
+    transition:opacity 0.15s;
+    opacity:0;
+  }
+  .edge.left, .edge.right {
+    top:0; bottom:0; width:6%;
+  }
+  .edge.top, .edge.bottom {
+    left:0; right:0; height:6%;
+  }
+  .edge.left { left:0; }
+  .edge.right { right:0; }
+  .edge.top { top:0; }
+  .edge.bottom { bottom:0; }
+  .edge.active { opacity:1; }
+
+  /* green and red variants */
+  .edge.green{background:rgba(44,183,47,0.85);}
+  .edge.red{background:rgba(231,76,60,0.85);}
+
+  /* small stats panel top-left while playing */
+  .statbox {
+    position:fixed;
+    left:12px;
+    top:12px;
+    background:rgba(255,255,255,0.9);
+    padding:8px 12px;
+    border-radius:8px;
+    box-shadow:0 4px 10px rgba(0,0,0,0.08);
+    z-index:60;
+    font-size:13px;
+  }
+
+  .linkish { color: #1a73e8; text-decoration:underline; cursor:pointer; }
+
+  footer.note {
+    position:fixed;
+    right:12px;
+    bottom:12px;
+    font-size:12px;
+    color:#666;
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Edge feedback bars (four sides) -->
+    <div id="edgeLeft" class="edge left"></div>
+    <div id="edgeRight" class="edge right"></div>
+    <div id="edgeTop" class="edge top"></div>
+    <div id="edgeBottom" class="edge bottom"></div>
+
+    <!-- In-game stat box -->
+    <div id="statbox" class="statbox" style="display:none">
+      <div>Round: <span id="statRound">0</span>/<span id="statRoundsTotal">0</span></div>
+      <div>Correct: <span id="statCorrect">0</span></div>
+      <div class="muted">Press keys 1–9 and 0 (for 10)</div>
+    </div>
+
+    <!-- Overlay UI: start / practice / finished -->
+    <div id="overlay" class="overlay">
+      <div class="card" id="card">
+        <h1>Dot Counting Game</h1>
+        <p class="muted">
+          You will see a set of dots (between 1 and 10) for half a second.<br/>
+          The dots then disappear — press the number on your keyboard (1–10) for how many you saw.
+        </p>
+
+        <p class="muted">
+          Each round: 0.5s dots → 2s to answer → 1s feedback. Default game has 60 rounds (≈5 minutes).
+        </p>
+
+        <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+          <button id="startBtn">Start full game (60 rounds)</button>
+          <button id="practiceBtn">Practice (1 minute, not recorded)</button>
+        </div>
+
+        <hr style="margin:16px 0;" />
+
+        <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;">
+          <div>
+            <label>Rounds: <input id="roundsInput" type="number" min="10" max="200" step="1" value="60" style="width:80px"/></label>
+          </div>
+          <div>
+            <label>Min dots: <input id="minDots" type="number" min="1" max="9" value="1" style="width:60px"/></label>
+          </div>
+          <div>
+            <label>Max dots: <input id="maxDots" type="number" min="2" max="20" value="10" style="width:60px"/></label>
+          </div>
+        </div>
+
+        <hr style="margin:16px 0;" />
+
+        <div id="globalStatsArea" class="muted" style="font-size:14px;">
+          Loading global stats... (requires optional backend).<br/>
+          If you want public leaderboards, see the instructions below to enable Firebase.
+        </div>
+
+        <div style="margin-top:12px;font-size:13px;color:#444">
+          <strong>Notes:</strong>
+          <ul style="text-align:left;margin:8px 0 0 20px;">
+            <li>Press number keys 1–9 and 0 (0 counts as 10).</li>
+            <li>Practice mode is not sent to any backend.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <footer class="note">Built for demo — host with GitHub Pages</footer>
+  </div>
+
+<script>
+/* -------------------------
+   CONFIGURATION & STATE
+   ------------------------- */
+
+const CONFIG = {
+  dotShowMs: 500,         // dots shown duration
+  responseWindowMs: 2000, // time to respond
+  feedbackMs: 1000,       // feedback flash
+  defaultRounds: 60,
+  practiceDurationSec: 60, // practice length
+  canvasPadding: 20,
+  minDots: 1,
+  maxDots: 10,
+  // FIREBASE: if you want to enable Firestore, drop your firebaseConfig object here
+  // Example placeholder:
+  firebaseConfig: null // <-- replace null with your firebase config object to enable saving/fetching
+};
+
+let state = {
+  roundsTotal: CONFIG.defaultRounds,
+  roundIndex: 0,
+  currentDots: 0,
+  inRound: false,
+  awaitingAnswer: false,
+  correctCount: 0,
+  responseTimes: [],
+  roundTimer: null,
+  roundTimeoutHandle: null,
+  startTimeEpoch: null,
+  practiceMode: false,
+  allRunsStatsFetched: false
+};
+
+/* -------------------------
+   OPTIONAL FIREBASE SETUP
+   ------------------------- */
+/* If you want to store global stats, create a Firebase project, enable Firestore,
+   then paste your firebase config object into CONFIG.firebaseConfig below.
+   When null, Firebase is disabled and site runs locally only. */
+let firebaseApp = null;
+let firestore = null;
+if (CONFIG.firebaseConfig) {
+  // load firebase SDKs dynamically
+  const s = document.createElement('script');
+  s.src = "https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js";
+  document.head.appendChild(s);
+  const s2 = document.createElement('script');
+  s2.src = "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js";
+  document.head.appendChild(s2);
+  s2.onload = () => {
+    firebaseApp = firebase.initializeApp(CONFIG.firebaseConfig);
+    firestore = firebase.firestore();
+    console.log("Firebase initialized");
+    fetchGlobalStats(); // attempt to fetch
+  };
+}
+
+/* -------------------------
+   DOM references
+   ------------------------- */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('startBtn');
+const practiceBtn = document.getElementById('practiceBtn');
+const roundsInput = document.getElementById('roundsInput');
+const minDotsInput = document.getElementById('minDots');
+const maxDotsInput = document.getElementById('maxDots');
+const statbox = document.getElementById('statbox');
+const statRound = document.getElementById('statRound');
+const statRoundsTotal = document.getElementById('statRoundsTotal');
+const statCorrect = document.getElementById('statCorrect');
+const edges = {
+  left: document.getElementById('edgeLeft'),
+  right: document.getElementById('edgeRight'),
+  top: document.getElementById('edgeTop'),
+  bottom: document.getElementById('edgeBottom')
+};
+const globalStatsArea = document.getElementById('globalStatsArea');
+
+/* -------------------------
+   Canvas sizing
+   ------------------------- */
+function resizeCanvas(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+/* -------------------------
+   Drawing dots
+   ------------------------- */
+function drawDots(n) {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // arrange dots in a visually pleasing grid (auto rows/cols)
+  const pad = CONFIG.canvasPadding;
+  const areaW = canvas.width - pad*2;
+  const areaH = canvas.height - pad*2;
+  // choose a grid size that fits n dots approximately square
+  let cols = Math.ceil(Math.sqrt(n));
+  let rows = Math.ceil(n / cols);
+  // compute positions
+  const cellW = areaW / cols;
+  const cellH = areaH / rows;
+  const r = Math.min(cellW, cellH) * 0.18; // dot radius
+  let i=0;
+  ctx.fillStyle = "#111";
+  for (let y=0; y<rows; y++){
+    for (let x=0; x<cols; x++){
+      if (i>=n) break;
+      const cx = pad + x*cellW + cellW/2;
+      const cy = pad + y*cellH + cellH/2;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI*2);
+      ctx.fill();
+      i++;
+    }
+  }
+}
+
+function clearCanvas(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+}
+
+/* -------------------------
+   Round flow
+   ------------------------- */
+function startGame({rounds, practice=false}){
+  CONFIG.minDots = Math.max(1, parseInt(minDotsInput.value) || 1);
+  CONFIG.maxDots = Math.max(CONFIG.minDots, parseInt(maxDotsInput.value) || 10);
+  state = Object.assign(state, {
+    roundsTotal: rounds,
+    roundIndex: 0,
+    currentDots: 0,
+    inRound: false,
+    awaitingAnswer: false,
+    correctCount: 0,
+    responseTimes: [],
+    startTimeEpoch: Date.now(),
+    practiceMode: practice
+  });
+
+  overlay.style.display = 'none';
+  statbox.style.display = 'block';
+  statRoundsTotal.textContent = state.roundsTotal;
+  updateStatBox();
+
+  // attach keyboard listener
+  window.addEventListener('keydown', onKeyDown);
+  // start first round after short delay
+  setTimeout(nextRound, 300);
+}
+
+function endGame(){
+  // cleanup timers & listeners
+  window.removeEventListener('keydown', onKeyDown);
+  clearCanvas();
+  statbox.style.display = 'none';
+
+  const correct = state.correctCount;
+  const total = state.roundsTotal;
+  const accuracy = total ? Math.round(1000 * correct / total)/10 : 0;
+  const medianRt = state.responseTimes.length ? median(state.responseTimes) : null;
+
+  // if not practice and firebase configured, upload stats
+  if (!state.practiceMode && firestore) {
+    uploadRunResult({
+      correct,
+      total,
+      accuracy,
+      medianRt,
+      createdAt: new Date().toISOString()
+    }).catch(err => console.warn("upload failed",err));
+  }
+
+  // show final overlay with totals and global stats
+  showFinalOverlay({correct, total, accuracy, medianRt});
+  // try refresh global stats
+  if (firestore) fetchGlobalStats();
+}
+
+/* compute median */
+function median(arr){
+  const s = [...arr].sort((a,b)=>a-b);
+  const mid = Math.floor(s.length/2);
+  if (s.length===0) return null;
+  return s.length%2 ? s[mid] : (s[mid-1]+s[mid])/2;
+}
+
+/* start next round */
+function nextRound(){
+  if (state.roundIndex >= state.roundsTotal) {
+    endGame();
+    return;
+  }
+  state.inRound = true;
+  state.awaitingAnswer = false;
+  state.roundIndex++;
+  updateStatBox();
+
+  // choose random dot count
+  const min = parseInt(CONFIG.minDots);
+  const max = parseInt(CONFIG.maxDots);
+  const n = Math.floor(Math.random() * (max - min + 1)) + min;
+  state.currentDots = n;
+
+  // show dots for 0.5s
+  drawDots(n);
+
+  // after show period, hide and start response window
+  setTimeout(()=>{
+    clearCanvas();
+    state.awaitingAnswer = true;
+    // start a timer for response window
+    state.roundTimer = Date.now();
+    state.roundTimeoutHandle = setTimeout(()=>{
+      // timeout: treat as wrong
+      state.awaitingAnswer = false;
+      giveFeedback(false, null);
+    }, CONFIG.responseWindowMs);
+  }, CONFIG.dotShowMs);
+}
+
+/* handle keyboard answers */
+function onKeyDown(e){
+  if (!state.awaitingAnswer) return;
+  // map '0' to 10, digits 1-9 to numbers
+  const key = e.key;
+  let val = null;
+  if (/^[1-9]$/.test(key)) val = parseInt(key,10);
+  else if (key === '0') val = 10;
+  else return;
+  // record response time
+  const rt = Date.now() - state.roundTimer;
+  clearTimeout(state.roundTimeoutHandle);
+  state.awaitingAnswer = false;
+
+  const correct = (val === state.currentDots);
+  if (correct) {
+    state.correctCount++;
+    state.responseTimes.push(rt);
+  } else {
+    // still record reaction time for wrong attempts
+    state.responseTimes.push(rt);
+  }
+  updateStatBox();
+  giveFeedback(correct, val);
+}
+
+function updateStatBox(){
+  statRound.textContent = state.roundIndex;
+  statCorrect.textContent = state.correctCount;
+}
+
+/* show feedback: color edges green/red for feedbackMs */
+function giveFeedback(correct, chosenVal){
+  // show color
+  const cls = correct ? 'green' : 'red';
+  for (const k in edges) {
+    edges[k].className = `edge ${k} ${cls} active`;
+  }
+  // hide after feedbackMs
+  setTimeout(()=>{
+    for (const k in edges) edges[k].className = `edge ${k}`;
+    // start next round after a tiny gap
+    setTimeout(nextRound, 80);
+  }, CONFIG.feedbackMs);
+}
+
+/* -------------------------
+   Overlay & UI
+   ------------------------- */
+startBtn.addEventListener('click',()=>{
+  const rounds = Math.max(1, parseInt(roundsInput.value) || CONFIG.defaultRounds);
+  startGame({rounds, practice:false});
+});
+practiceBtn.addEventListener('click',()=>{
+  // compute approximate rounds for 1 minute using single-round durations
+  const singleRoundMs = CONFIG.dotShowMs + CONFIG.responseWindowMs + CONFIG.feedbackMs;
+  let approxRounds = Math.max(5, Math.floor(CONFIG.practiceDurationSec*1000 / singleRoundMs));
+  startGame({rounds: approxRounds, practice:true});
+});
+
+function showFinalOverlay({correct, total, accuracy, medianRt}){
+  overlay.style.display = 'flex';
+  const card = document.getElementById('card');
+  card.innerHTML = `
+    <h1>Finished!</h1>
+    <p class="muted">You got <strong>${correct}</strong> out of <strong>${total}</strong> correct.</p>
+    <p class="muted">Accuracy: <strong>${accuracy}%</strong></p>
+    <p class="muted">Median reaction time: <strong>${medianRt ? Math.round(medianRt) + ' ms' : '—'}</strong></p>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
+      <button id="playAgainBtn">Play again</button>
+      <button id="backMenuBtn">Back to menu</button>
+    </div>
+    <hr style="margin:16px 0;">
+    <div id="afterGlobal" class="muted">Loading global stats...</div>
+  `;
+  document.getElementById('playAgainBtn').addEventListener('click', ()=> {
+    // keep the same rounds & start again
+    startGame({rounds: state.roundsTotal, practice:false});
+  });
+  document.getElementById('backMenuBtn').addEventListener('click', ()=> {
+    // rebuild original menu content (simple approach: reload page)
+    location.reload();
+  });
+
+  // refresh global stats area content
+  if (firestore) fetchGlobalStats().then(renderGlobalStatsInCard);
+  else document.getElementById('afterGlobal').textContent = 'Global stats not configured.';
+}
+
+/* -------------------------
+   FIRESTORE (optional)
+   ------------------------- */
+
+/* upload a run result to Firestore 'runs' collection */
+async function uploadRunResult(doc) {
+  if (!firestore) return;
+  // simple client-side anonymous write (make sure Firestore rules allow it or configure)
+  await firestore.collection('dot_game_runs').add(doc);
+  console.log("uploaded result", doc);
+}
+
+/* fetch last N runs and compute global stats */
+async function fetchGlobalStats() {
+  if (!firestore) {
+    globalStatsArea.textContent = "Global stats: Backend not configured. To enable, add Firebase config.";
+    return;
+  }
+  try {
+    const snapshot = await firestore.collection('dot_game_runs')
+      .orderBy('createdAt','desc')
+      .limit(500)
+      .get();
+
+    const docs = snapshot.docs.map(d => d.data());
+    if (docs.length === 0) {
+      globalStatsArea.textContent = "No public runs yet.";
+      return docs;
+    }
+    // compute aggregates
+    const totals = docs.reduce((acc,d)=>{
+      acc.count++;
+      acc.sumAcc += (d.accuracy||0);
+      if ((d.accuracy||0) > acc.best) acc.best = d.accuracy||0;
+      return acc;
+    }, {count:0, sumAcc:0, best:0});
+    const avg = Math.round(10*totals.sumAcc / totals.count)/10;
+    globalStatsArea.innerHTML = `
+      Public runs: ${totals.count} • Avg accuracy: ${avg}% • Best: ${totals.best}%<br/>
+      (Latest ${docs.length} runs used for stats)
+    `;
+    return docs;
+  } catch (err) {
+    console.warn(err);
+    globalStatsArea.textContent = "Error fetching global stats (check Firebase).";
+    return [];
+  }
+}
+
+/* Render global stats in finished card */
+function renderGlobalStatsInCard(docs){
+  const el = document.getElementById('afterGlobal');
+  if (!el) return;
+  if (!docs || docs.length===0) {
+    el.textContent = "No public runs yet.";
+    return;
+  }
+  const accuracies = docs.map(d=>d.accuracy||0).sort((a,b)=>b-a);
+  const avg = Math.round(10*accuracies.reduce((a,b)=>a+b,0)/accuracies.length)/10;
+  el.innerHTML = `
+    Global stats (recent ${accuracies.length} runs):<br/>
+    Avg accuracy: <strong>${avg}%</strong> • Best: <strong>${accuracies[0]}%</strong>
+  `;
+}
+
+/* -------------------------
+   INITIAL UI load
+   ------------------------- */
+(async function init(){
+  // set inputs defaults
+  roundsInput.value = CONFIG.defaultRounds;
+  minDotsInput.value = CONFIG.minDots;
+  maxDotsInput.value = CONFIG.maxDots;
+
+  // attempt to fetch global stats if available
+  if (CONFIG.firebaseConfig && firestore) {
+    await fetchGlobalStats();
+  } else {
+    globalStatsArea.textContent = "Global stats disabled — optionally configure Firebase to enable leaderboards.";
+  }
+})();
+
+</script>
+</body>
+</html>
