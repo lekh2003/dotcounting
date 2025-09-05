@@ -160,11 +160,15 @@ function randnBoxMuller(){
   while(v===0) v=Math.random();
   return Math.sqrt(-2*Math.log(u)) * Math.cos(2*Math.PI*v);
 }
-function sampleDotsLognormal(mu=1.55, sigma=0.5){
+function sampleDotsLognormal(mu = 1.55, sigma = 0.5) {
   const z = randnBoxMuller();
-  const x = Math.exp(mu + sigma * z);      // continuous lognormal
-  let n = Math.max(1, Math.round(x));      // integerize, at least 1
-  if (n > 10) n = 10;                      // cap at 10 to match input range
+  const x = Math.exp(mu + sigma * z);   // continuous lognormal
+  let n = Math.max(1, Math.round(x));   // integerize, at least 1
+
+  // If it lands above 10, redraw uniformly from 1..10
+  if (n > 10) {
+    n = Math.floor(Math.random() * 10) + 1; // 1..10 inclusive
+  }
   return n;
 }
 
