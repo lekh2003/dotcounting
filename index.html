@@ -41,11 +41,11 @@
       <div class="card" id="card">
         <h1>Dot Counting Game</h1>
         <p class="muted">
-          You will see a <strong>random number of dots</strong> for half a second (average ≈ 5.5).<br/>
+          You will see a <strong>random number of dots</strong> for <strong>0.3 seconds</strong> (average ≈ 5.5).<br/>
           The dots then disappear — press the number on your keyboard (1–10) for how many you saw.
         </p>
         <p class="muted">
-          Each round: 0.5s dots → 2s to answer → 1s feedback. Default game has 60 rounds (≈3 minutes).
+          Each round: <strong>0.3s</strong> dots → 2s to answer → 1s feedback. Default game has 60 rounds (≈3 minutes).
         </p>
         <div style="display:flex;gap:8px;justify-content:center;margin-top:12px;">
           <button id="startBtn">Start full game (60 rounds)</button>
@@ -65,12 +65,11 @@
 
 <script>
 const CONFIG = {
-  dotShowMs: 500,
+  dotShowMs: 300,              // <— was 500ms, now 300ms
   responseWindowMs: 2000,
   feedbackMs: 1000,
   defaultRounds: 60,
   canvasPadding: 20,
-  // (minDots/maxDots removed from gameplay; generation uses lognormal now)
   firebaseConfig: {
     apiKey: "AIzaSyBijKB23Azm4Gegzad7MhKboTMk9HBgtv0",
     authDomain: "dotcounting.firebaseapp.com",
@@ -165,7 +164,7 @@ function sampleDotsLognormal(mu=1.55, sigma=0.5){
   const z = randnBoxMuller();
   const x = Math.exp(mu + sigma * z);      // continuous lognormal
   let n = Math.max(1, Math.round(x));      // integerize, at least 1
-  if (n > 20) n = 20;                       // soft cap to keep visuals sane
+  if (n > 10) n = 10;                      // cap at 10 to match input range
   return n;
 }
 
@@ -223,7 +222,7 @@ function median(arr){const s=[...arr].sort((a,b)=>a-b);const m=Math.floor(s.leng
 function nextRound(){
   if(state.roundIndex>=state.roundsTotal){endGame();return;}
   state.inRound=true; state.awaitingAnswer=false; state.roundIndex++; updateStatBox();
-  const n = sampleDotsLognormal(1.5, 0.5);
+  const n = sampleDotsLognormal(1.55, 0.5);   // <— use μ=1.55 (avg ≈ 5.5)
   state.currentDots=n; drawDots(n);
   setTimeout(()=>{ clearCanvas(); state.awaitingAnswer=true; state.roundTimer=Date.now();
     state.roundTimeoutHandle=setTimeout(()=>{ state.awaitingAnswer=false; giveFeedback(false,null);},CONFIG.responseWindowMs);
